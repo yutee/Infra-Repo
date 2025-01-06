@@ -1,0 +1,101 @@
+---
+- name: Deploy tools on AKS
+  hosts: localhost
+  gather_facts: no
+  vars:
+    ansible_python_interpreter: /Library/Frameworks/Python.framework/Versions/3.12/bin/python3
+
+  pre_tasks:
+    - name: Install base Python packages
+      pip:
+        name:
+          - packaging
+          - setuptools
+          - wheel
+        state: present
+        executable: /Library/Frameworks/Python.framework/Versions/3.12/bin/pip3
+      register: base_pip_result
+      until: base_pip_result is success
+      retries: 3
+      delay: 5
+
+    - name: Install Kubernetes related packages
+      pip:
+        name:
+          - kubernetes>=12.0.0
+          - openshift>=0.12.0
+          - PyYAML
+          - jsonpatch
+        state: present
+        executable: /Library/Frameworks/Python.framework/Versions/3.12/bin/pip3
+      register: k8s_pip_result
+      until: k8s_pip_result is success
+      retries: 3
+      delay: 5
+
+    - name: Verify kubeconfig file exists
+      stat:
+        path: "{{ kubeconfig_path }}"
+      register: kubeconfig_stat
+
+    - name: Debug kubeconfig status
+      debug:
+        msg: 
+          - "Kubeconfig path: {{ kubeconfig_path }}"
+          - "Kubeconfig exists: {{ kubeconfig_stat.stat.exists }}"
+        verbosity: 1
+
+    - name: Fail if kubeconfig doesn't exist
+      fail:
+        msg: "Kubeconfig file not found at {{ kubeconfig_path }}"
+      when: not kubeconfig_stat.stat.exists
+
+    - name: Verify kubectl access
+      kubernetes.core.k8s_info:
+        kubeconfig: "{{ kubeconfig_path }}"
+        kind: Node
+      register: node_status
+      ignore_errors: yes
+
+    - name: Debug cluster connection details
+      debug:
+        msg: 
+          - "Connection attempt completed"
+          - "Status: {{ node_status }}"
+        verbosity: 1
+
+    - name: Verify cluster connection
+      fail:
+        msg: "Cannot connect to Kubernetes cluster. Error: {{ node_status.msg | default('Unknown error') }}"
+      when: node_status.failed | default(true)
+
+    - name: Create required namespaces
+      kubernetes.core.k8s:
+        kubeconfig: "{{ kubeconfig_path }}"
+        name: "{{ item }}"
+        api_version: v1
+        kind: Namespace
+        state: present
+      loop:
+        - argocd
+        - logging
+        - monitoring
+        - app
+      register: namespace_result
+      when: not node_status.failed
+
+  roles:
+    - role: argocd_install
+      vars:
+        kubeconfig: "{{ kubeconfig_path }}"
+      when: not node_status.failed
+    
+    - role: logging_stack
+      vars:
+        kubeconfig: "{{ kubeconfig_path }}"
+      when: not node_status.failed
+    
+    - role: monitoring_stack
+      vars:
+        kubeconfig: "{{ kubeconfig_path }}"
+      when: not node_status.failed

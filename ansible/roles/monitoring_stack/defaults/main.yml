@@ -1,0 +1,4 @@
+
+monitoring_namespace: monitoring
+prometheus_release_name: prometheus
+grafana_admin_password: admin

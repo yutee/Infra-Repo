@@ -1,0 +1,91 @@
+
+# first install Nginx Ingress Controller
+- name: Add nginx-ingress helm repository
+  kubernetes.core.helm_repository:
+    name: ingress-nginx
+    repo_url: https://kubernetes.github.io/ingress-nginx
+
+- name: Create ingress-nginx namespace
+  kubernetes.core.k8s:
+    name: "{{ ingress_controller_namespace }}"
+    api_version: v1
+    kind: Namespace
+    state: present
+
+- name: Install NGINX Ingress Controller
+  kubernetes.core.helm:
+    name: ingress-nginx
+    chart_ref: ingress-nginx/ingress-nginx
+    release_namespace: "{{ ingress_controller_namespace }}"
+    chart_version: "{{ ingress_controller_version }}"
+    wait: yes
+    values:
+      controller:
+        service:
+          type: LoadBalancer
+
+- name: Wait for Ingress Controller to be ready
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: ingress-nginx-controller
+    namespace: "{{ ingress_controller_namespace }}"
+  register: ingress_deployment
+  until: ingress_deployment.resources[0].status.availableReplicas is defined and ingress_deployment.resources[0].status.availableReplicas > 0
+  retries: 30
+  delay: 10
+
+# then proceed with argocd installation
+- name: Verify required collections
+  ansible.builtin.pip:
+    name:
+      - kubernetes>=12.0.0
+      - PyYAML
+      - jsonpatch
+    state: present
+
+- name: Add ArgoCD Helm repository
+  kubernetes.core.helm_repository:
+    name: argo
+    repo_url: https://argoproj.github.io/argo-helm
+
+- name: Create ArgoCD namespace
+  kubernetes.core.k8s:
+    name: "{{ argocd_namespace }}"
+    api_version: v1
+    kind: Namespace
+    state: present
+
+- name: Install ArgoCD using Helm
+  kubernetes.core.helm:
+    name: "{{ argocd_release_name }}"
+    chart_ref: argo/argo-cd
+    chart_version: "{{ argocd_chart_version }}"
+    release_namespace: "{{ argocd_namespace }}"
+    values: "{{ argocd_values }}"
+    wait: yes
+
+- name: Wait for ArgoCD to be ready
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: "{{ argocd_release_name }}-server"
+    namespace: "{{ argocd_namespace }}"
+  register: argocd_deployment
+  until: argocd_deployment.resources[0].status.availableReplicas is defined and argocd_deployment.resources[0].status.availableReplicas > 0
+  retries: 30
+  delay: 10
+
+# create argocd application and ingress
+- name: Create ArgoCD Application
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ lookup('template', 'application.yml') }}"
+    wait: yes
+    wait_timeout: 300
+
+- name: Create ArgoCD Ingress
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ lookup('template', 'ingress.yml') }}"
+    wait: yes

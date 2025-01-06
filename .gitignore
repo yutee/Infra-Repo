@@ -1,0 +1,20 @@
+# directory terraform
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/terraform.tfstate.backup
+terraform/terraform.tfstate.backup.*
+
+# ignore terraform variables file
+terraform/terraform.tfvars
+
+# ignore terraform plugin directory
+terraform/.terraform/
+
+terraform/terraform.lock.hcl
+terraform/.terraform.lock.hcl
+
+# ignore logs and temporary files
+terraform/*.log
+terraform/*.s
+
+.infracost/

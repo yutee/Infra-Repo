@@ -1,0 +1,42 @@
+- name: Add Elastic Helm repository
+  kubernetes.core.helm_repository:
+    name: elastic
+    repo_url: https://helm.elastic.co
+
+- name: Create logging namespace
+  kubernetes.core.k8s:
+    name: "{{ logging_namespace }}"
+    api_version: v1
+    kind: Namespace
+    state: present
+
+- name: Add Bitnami Helm repository
+  kubernetes.core.helm_repository:
+    name: bitnami
+    repo_url: https://charts.bitnami.com/bitnami
+
+- name: Install Elasticsearch
+  kubernetes.core.helm:
+    name: elasticsearch
+    chart_ref: elastic/elasticsearch
+    release_namespace: "{{ logging_namespace }}"
+    values:
+      replicas: "{{ elasticsearch_replicas }}"
+
+- name: Install Fluentd
+  kubernetes.core.helm:
+    name: fluentd
+    chart_ref: bitnami/fluentd
+    release_namespace: "{{ logging_namespace }}"
+    values:
+      elasticsearch:
+        host: elasticsearch-master
+
+- name: Install Kibana
+  kubernetes.core.helm:
+    name: kibana
+    chart_ref: elastic/kibana
+    release_namespace: "{{ logging_namespace }}"
+    values:
+      service:
+        type: "{{ kibana_service_type }}"

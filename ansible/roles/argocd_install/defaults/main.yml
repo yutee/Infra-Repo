@@ -1,0 +1,20 @@
+
+argocd_namespace: argocd
+argocd_release_name: argocd
+argocd_chart_version: "5.46.7"
+argocd_host: argocd.utibe.rocks
+app_name: "boutique-app"
+app_repo_url: "https://github.com/yutee/k8s-manifests-repo"
+app_target_revision: "HEAD"  # or specific branch/tag
+app_path: "boutique-app"  # path to your helm chart in the repo
+app_namespace: "default"  # namespace where your app will be deployed
+
+# Ingress Controller configuration
+ingress_controller_namespace: ingress-nginx
+ingress_controller_version: "4.9.0"
+
+# ArgoCD Helm values
+argocd_values:
+  server:
+    extraArgs:
+      - --insecure
